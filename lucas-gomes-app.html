@@ -2231,6 +2231,14 @@
         padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
       }
     }
+
+    @keyframes syncFadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes syncFadeOut {
+      to { opacity: 0; transform: translateY(6px); }
+    }
   </style>
 </head>
 
@@ -2250,6 +2258,8 @@
        App educativo gamificado — identidade visual Lucas Coins
        ============================================================ */
     const STORAGE_KEY = 'lucas-coins-state-v3';
+    let localStateVersion = null; // rastreia versão local para detectar mudanças remotas
+    let pollTimer = null;
     const DAILY_TASKS = [
       { id: 'cama', label: 'Arrumar a cama', coins: 1, emoji: '🛏️', color: 'green', cat: 'Rotina' },
       { id: 'dentes', label: 'Escovar os dentes', coins: 1, emoji: '🦷', color: 'blue', cat: 'Rotina' },
@@ -2333,7 +2343,7 @@
     ];
     let state = null;
     let session = { tab: 'home', parentUnlocked: false, pinBuffer: '', taskCat: 'diarias', taskSubCat: 'todos', familyTab: 'aprovar' };
-    function defaultState() { return { child: { name: 'Lucas Gomes' }, balance: 0, lifetimeXP: 0, streak: 0, lastActiveDate: null, lastWeekDate: null, pendingTasks: [], history: [], goals: [{ id: cryptoId(), name: 'Nintendo Switch', target: 2500, saved: 0, icon: 'bicicleta' }], counters: {}, unlockedAchievements: [], customMissions: [], customDailyTasks: [], activeRecoveries: [], notifications: [], parentPin: '1234', todayCompleted: [], weekCompleted: [], grades: [], ledger: [] }; }
+    function defaultState() { return { child: { name: 'Lucas Gomes' }, balance: 0, lifetimeXP: 0, streak: 0, lastActiveDate: null, lastWeekDate: null, pendingTasks: [], history: [], goals: [{ id: cryptoId(), name: 'Nintendo Switch', target: 2500, saved: 0, icon: 'bicicleta' }], counters: {}, unlockedAchievements: [], customMissions: [], customDailyTasks: [], activeRecoveries: [], notifications: [], parentPin: '1234', todayCompleted: [], weekCompleted: [], grades: [], ledger: [], stateVersion: Date.now() }; }
     function cryptoId() { return Math.random().toString(36).slice(2, 10); }
     function todayStr() { return new Date().toISOString().slice(0, 10); }
     function weekStr() { const d = new Date(); const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1); const mon = new Date(d.setDate(diff)); return mon.toISOString().slice(0, 10); }
@@ -2368,10 +2378,13 @@
       if (!state.lastWeekDate) state.lastWeekDate = null;
       if (!state.ledger) state.ledger = [];
       rolloverDay(); rolloverWeek(); await saveState();
+      localStateVersion = state.stateVersion || null; // sincroniza versão local após carregar
     }
 
     async function saveState() {
       try {
+        state.stateVersion = Date.now(); // incrementa versão para que outros dispositivos detectem
+        localStateVersion = state.stateVersion; // atualiza versão local — não disparar reload desnecessário
         await fetch(`${API_BASE}/api/state`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2380,6 +2393,57 @@
       } catch (e) {
         console.warn('[Lucas Coins] Erro ao salvar estado no servidor.', e);
       }
+    }
+
+    /* ── Sincronização em tempo real (polling) ────────────────────────────
+       Verifica a cada 10s se outro dispositivo salvou uma versão mais nova.
+       Pausa automaticamente quando a aba está em segundo plano (Page Visibility API).
+       ─────────────────────────────────────────────────────────────────── */
+    async function pollForUpdates() {
+      if (document.hidden) return; // aba em segundo plano → pular
+      try {
+        const res = await fetch(`${API_BASE}/api/state?key=${encodeURIComponent(STORAGE_KEY)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.exists || !data.value) return;
+        const remote = JSON.parse(data.value);
+        // Só recarrega se a versão remota for diferente da local (ou seja, outro dispositivo salvou)
+        if (remote.stateVersion && remote.stateVersion !== localStateVersion) {
+          localStateVersion = remote.stateVersion;
+          state = remote;
+          // Garantir campos que podem não existir em estados antigos
+          if (!state.grades) state.grades = [];
+          if (!state.weekCompleted) state.weekCompleted = [];
+          if (!state.customDailyTasks) state.customDailyTasks = [];
+          if (!state.lastWeekDate) state.lastWeekDate = null;
+          if (!state.ledger) state.ledger = [];
+          render();
+          showSyncBadge();
+        }
+      } catch (e) { /* falha silenciosa — pode ser offline ou timeout */ }
+    }
+
+    function startPolling() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(pollForUpdates, 10000); // a cada 10 segundos
+    }
+
+    function showSyncBadge() {
+      const existing = document.getElementById('sync-badge');
+      if (existing) { existing.remove(); }
+      const badge = document.createElement('div');
+      badge.id = 'sync-badge';
+      badge.innerHTML = '🔄 Sincronizado';
+      badge.style.cssText = [
+        'position:fixed', 'bottom:80px', 'right:14px',
+        'background:rgba(15,206,198,.18)', 'border:1.5px solid rgba(14,206,198,.4)',
+        'color:#0ecec6', 'font-size:11px', 'font-weight:900',
+        'padding:6px 12px', 'border-radius:999px', 'z-index:1500',
+        'animation:syncFadeIn .3s ease, syncFadeOut .4s ease 1.8s forwards',
+        'pointer-events:none'
+      ].join(';');
+      document.body.appendChild(badge);
+      setTimeout(() => badge.remove(), 2300);
     }
     function rolloverDay() { const t = todayStr(); if (state.lastActiveDate !== t) { state.todayCompleted = []; if (state.lastActiveDate) { const diff = Math.round((new Date(t) - new Date(state.lastActiveDate)) / 86400000); if (diff > 1) state.streak = 0; } state.lastActiveDate = t; } }
     function rolloverWeek() { const w = weekStr(); if (state.lastWeekDate !== w) { state.weekCompleted = []; state.lastWeekDate = w; } }
@@ -2673,6 +2737,17 @@
       document.getElementById('loading').style.display = 'none';
       document.getElementById('app').style.display = 'flex';
       render();
+      startPolling();
+      // Pausa o polling quando a aba vai para segundo plano; retoma quando volta
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        } else {
+          pollForUpdates(); // verifica imediatamente ao voltar ao foco
+          startPolling();
+        }
+      });
     })();
   </script>
 </body>
