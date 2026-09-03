@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "description": "App gamificado de educação financeira para Lucas Gomes",
   "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js"
   },
   "dependencies": {
+    "@upstash/redis": "^1.34.9",
     "better-sqlite3": "^13.0.3",
     "cors": "^2.8.6",
     "express": "^5.2.1"

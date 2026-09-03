@@ -10,9 +10,11 @@ lucas_coins.db-wal
 *.log
 npm-debug.log*
 
-# Variáveis de ambiente
+# Variáveis de ambiente (credenciais — nunca subir ao GitHub!)
 .env
 .env.local
+.env*.local
+
 
 # Editor
 .vscode/
