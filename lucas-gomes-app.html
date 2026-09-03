@@ -1755,6 +1755,24 @@
       box-shadow: none;
     }
 
+    .btn-reject {
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, #e85d5d, #a33030);
+      color: #fff;
+      font-weight: 900;
+      font-size: 13px;
+      box-shadow: 0 4px 0 #6b1515;
+      transition: transform .1s, box-shadow .1s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .btn-reject:active {
+      transform: translateY(2px);
+      box-shadow: none;
+    }
+
     .empty-note {
       text-align: center;
       color: rgba(255, 248, 231, .48);
@@ -2601,7 +2619,36 @@
       const ftabs = [{ id: 'aprovar', label: '✅ Aprovar' }, { id: 'acoes', label: '➕ Registrar' }, { id: 'historico', label: '📜 Histórico' }, { id: 'relatorios', label: '📊 Relatórios' }, { id: 'config', label: '⚙️ Config' }];
       let body = '';
       if (activeTab === 'aprovar') {
-        body = !pending.length ? '<div class="empty-note">✅ Nenhuma tarefa aguardando aprovação agora.<br><br>Quando Lucas marcar uma tarefa como feita, ela aparecerá aqui! 🎉</div>' : pending.map(p => { const isRec = p.taskId.startsWith('rec_'); const isWeek = p.taskId.startsWith('week_'); let title, coins; if (isRec) { const rec = state.activeRecoveries.find(r => 'rec_' + r.uid === p.taskId); const info = rec ? RECOVERY_MISSIONS[rec.type] : null; title = info ? info.title : 'Missão recuperação'; coins = info ? info.coins : 0; } else if (isWeek) { const wid = p.taskId.slice(5); const t = WEEKLY_TASKS.find(x => x.id === wid); title = t ? (t.emoji + ' ' + t.label + ' (Semanal)') : p.taskId; coins = t ? t.coins : 0; } else { const allD = [...DAILY_TASKS, ...(state.customDailyTasks || [])]; const t = allD.find(x => x.id === p.taskId); title = t ? (t.emoji + ' ' + t.label) : p.taskId; coins = t ? t.coins : 0; } return '<div class="approve-row"><div class="a-info"><div class="a-title">' + title + '</div><div class="a-sub">🪙 +' + coins + ' Lucas Coins</div></div><button class="btn-approve" data-approve="' + p.uid + '">Aprovar ✅</button></div>'; }).join('');
+        body = !pending.length
+          ? '<div class="empty-note">✅ Nenhuma tarefa aguardando aprovação agora.<br><br>Quando Lucas marcar uma tarefa como feita, ela aparecerá aqui! 🎉</div>'
+          : pending.map(p => {
+              const isRec = p.taskId.startsWith('rec_');
+              const isWeek = p.taskId.startsWith('week_');
+              let title, coins;
+              if (isRec) {
+                const rec = state.activeRecoveries.find(r => 'rec_' + r.uid === p.taskId);
+                const info = rec ? RECOVERY_MISSIONS[rec.type] : null;
+                title = info ? info.title : 'Missão recuperação';
+                coins = info ? info.coins : 0;
+              } else if (isWeek) {
+                const wid = p.taskId.slice(5);
+                const t = WEEKLY_TASKS.find(x => x.id === wid);
+                title = t ? (t.emoji + ' ' + t.label + ' (Semanal)') : p.taskId;
+                coins = t ? t.coins : 0;
+              } else {
+                const allD = [...DAILY_TASKS, ...(state.customDailyTasks || [])];
+                const t = allD.find(x => x.id === p.taskId);
+                title = t ? (t.emoji + ' ' + t.label) : p.taskId;
+                coins = t ? t.coins : 0;
+              }
+              return '<div class="approve-row">' +
+                '<div class="a-info"><div class="a-title">' + title + '</div><div class="a-sub">🪙 +' + coins + ' Lucas Coins</div></div>' +
+                '<div style="display:flex;gap:8px;flex-shrink:0;">' +
+                  '<button class="btn-reject" data-reject="' + p.uid + '">Recusar ❌</button>' +
+                  '<button class="btn-approve" data-approve="' + p.uid + '">Aprovar ✅</button>' +
+                '</div>' +
+              '</div>';
+            }).join('');
       } else if (activeTab === 'acoes') {
         const specials = [...SPECIAL_MISSIONS, ...state.customMissions];
         body = '<div class="section-title" style="margin:4px 0 10px;"><span class="st-icon">⭐</span>Missão Especial</div>' +
@@ -2714,6 +2761,31 @@
       document.querySelectorAll('[data-open]').forEach(el => el.addEventListener('click', () => { const w = el.dataset.open; if (w === 'notifs') modalNotifs(); if (w === 'newgoal') modalNewGoal(); if (w === 'addcoins') modalAddCoins(); if (w === 'challenge') modalChallenge(); if (w === 'recovery') modalRecovery(); if (w === 'addtask') modalAddTask(); }));
       document.querySelectorAll('[data-deduct]').forEach(el => el.addEventListener('click', () => modalDeduct()));
       document.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', closeModal));
+      document.querySelectorAll('[data-reject]').forEach(el => el.addEventListener('click', () => {
+        const uid = el.dataset.reject;
+        const p = state.pendingTasks.find(x => x.uid === uid);
+        if (!p) return;
+        // Descobrir o nome da tarefa para a notificação
+        let title = p.taskId;
+        if (p.taskId.startsWith('rec_')) {
+          const rec = state.activeRecoveries.find(r => 'rec_' + r.uid === p.taskId);
+          const info = rec ? RECOVERY_MISSIONS[rec.type] : null;
+          title = info ? info.title : 'Missão recuperação';
+        } else if (p.taskId.startsWith('week_')) {
+          const wid = p.taskId.slice(5);
+          const t = WEEKLY_TASKS.find(x => x.id === wid);
+          title = t ? t.label : p.taskId;
+        } else {
+          const allD = [...DAILY_TASKS, ...(state.customDailyTasks || [])];
+          const t = allD.find(x => x.id === p.taskId);
+          title = t ? t.label : p.taskId;
+        }
+        state.pendingTasks = state.pendingTasks.filter(x => x.uid !== uid);
+        pushNotification('A tarefa "' + title + '" não foi aprovada. Tente novamente! 💪', '❌');
+        saveState();
+        render();
+        toast('❌ Tarefa recusada: ' + title);
+      }));
       document.querySelectorAll('[data-approve]').forEach(el => el.addEventListener('click', () => {
         const uid = el.dataset.approve; const p = state.pendingTasks.find(x => x.uid === uid); if (!p) return; const prevLevel = currentLevel().n;
         if (p.taskId.startsWith('rec_')) { const recUid = p.taskId.slice(4); const rec = state.activeRecoveries.find(r => r.uid === recUid); if (rec) { const info = RECOVERY_MISSIONS[rec.type]; creditCoins(info.coins, { counterId: rec.type, prevLevel, taskId: 'rec_' + recUid, type: 'recovery', label: info.title }); state.activeRecoveries = state.activeRecoveries.filter(r => r.uid !== recUid); pushNotification('Missão concluída: ' + info.title + '. +' + info.coins + ' moedas!', '💛'); toast('💛 Missão concluída! +' + info.coins + ' LC', true); } }
