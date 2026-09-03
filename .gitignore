@@ -1,0 +1,23 @@
+# Dependências Node
+node_modules/
+
+# Banco de dados local (dados pessoais do Lucas)
+lucas_coins.db
+lucas_coins.db-shm
+lucas_coins.db-wal
+
+# Logs
+*.log
+npm-debug.log*
+
+# Variáveis de ambiente
+.env
+.env.local
+
+# Editor
+.vscode/
+.idea/
+
+# Windows
+Thumbs.db
+desktop.ini
