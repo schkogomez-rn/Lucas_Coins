@@ -2377,8 +2377,10 @@
       if (!state.customDailyTasks) state.customDailyTasks = [];
       if (!state.lastWeekDate) state.lastWeekDate = null;
       if (!state.ledger) state.ledger = [];
-      rolloverDay(); rolloverWeek(); await saveState();
-      localStateVersion = state.stateVersion || null; // sincroniza versão local após carregar
+      rolloverDay(); rolloverWeek();
+      if (!state.stateVersion) state.stateVersion = Date.now(); // garante campo existe
+      await saveState(); // saveState atualiza state.stateVersion e localStateVersion
+      // localStateVersion já é atualizado dentro de saveState()
     }
 
     async function saveState() {
